@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Daily Lifestyle Tracker</title>
+  <link rel="icon" href="icon.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<link rel="manifest" href="/site.webmanifest">
+  <link rel="manifest" href="manifest.json">
+<script>
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("service-worker.js");
+  }
+</script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #ffe6f0;
+      margin: 0;
+      padding: 20px;
+      color: #333;
+    }
+    h2 {
+      color: #cc3366;
+    }
+    .section {
+      background: #fff;
+      border-radius: 12px;
+      padding: 15px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    input[type="checkbox"] {
+      margin-right: 10px;
+    }
+    textarea, input[type="text"], select {
+      width: 100%;
+      padding: 8px;
+      margin-top: 8px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      resize: vertical;
+    }
+    button {
+      padding: 10px;
+      background: #cc3366;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+    .progress {
+      height: 10px;
+      background: #ccc;
+      border-radius: 5px;
+      margin-top: 10px;
+      overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%;
+      width: 0;
+      background: #cc3366;
+      transition: width 0.3s;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>Daily Lifestyle Tracker</h2>
+
+  <div class="section">
+    <label for="datePicker"><strong>Select Date:</strong></label>
+    <input type="date" id="datePicker" onchange="loadDay()">
+  </div>
+
+  <div class="section">
+    <h3>Daily Routine</h3>
+    <label><input type="checkbox" class="task" data-key="water">Drink water</label><br>
+    <label><input type="checkbox" class="task" data-key="workout">Workout</label><br>
+    <label><input type="checkbox" class="task" data-key="read">Journal</label><br>
+     <label><input type="checkbox" class="task" data-key="read">Read a book on self improvement</label><br>
+  </div>
+
+  <div class="section">
+    <h3>Top-do List</h3>
+    <input type="text" class="goal" placeholder="Goal 1"><br>
+    <input type="text" class="goal" placeholder="Goal 2"><br>
+    <input type="text" class="goal" placeholder="Goal 3"><br>
+    <input type="text" class="goal" placeholder="Goal 4"><br>
+    <input type="text" class="goal" placeholder="Goal 5"><br>
+    <input type="text" class="goal" placeholder="Goal 6">
+  </div>
+
+  <div class="section">
+    <h3>5-Minute Journal</h3>
+    <label>Gratitude:</label>
+    <textarea class="journal" data-key="gratitude" rows="2"></textarea>
+    <label>What would make today great?</label>
+    <textarea class="journal" data-key="great" rows="2"></textarea>
+    <label>Affirmation:</label>
+    <textarea class="journal" data-key="affirmation" rows="1"></textarea>
+  </div>
+
+  <div class="section">
+    <h3>Bible Study Prompt</h3>
+    <label>Today's Verse/Topic:</label>
+    <textarea class="journal" data-key="bible" rows="2"></textarea>
+  </div>
+
+  <div class="section">
+    <h3>Reflection</h3>
+    <label>What went well today?</label>
+    <textarea class="journal" data-key="well" rows="2"></textarea>
+    <label>What can I improve?</label>
+    <textarea class="journal" data-key="improve" rows="2"></textarea>
+  </div>
+
+  <div class="section">
+    <h3>Daily Progress</h3>
+    <button onclick="saveDay()">Mark Day Complete</button>
+    <div class="progress">
+      <div class="progress-bar" id="progress-bar"></div>
+    </div>
+    <p id="streak">Streak: 0 days</p>
+  </div>
+
+  <script>
+    const streakKey = 'streak';
+    const progress = document.getElementById('progress-bar');
+    const datePicker = document.getElementById('datePicker');
+
+    if (!datePicker.value) {
+      const today = new Date().toISOString().split('T')[0];
+      datePicker.value = today;
+    }
+
+    let streak = localStorage.getItem(streakKey) || 0;
+    document.getElementById('streak').innerText = `Streak: ${streak} days`;
+    progress.style.width = `${(streak % 7) * 14.28}%`;
+
+    function getKey() {
+      return `tracker-${datePicker.value}`;
+    }
+
+    function saveDay() {
+      const data = {
+        tasks: {},
+        goals: [],
+        journal: {}
+      };
+      document.querySelectorAll('.task').forEach(cb => {
+        data.tasks[cb.dataset.key] = cb.checked;
+      });
+      document.querySelectorAll('.goal').forEach((input, i) => {
+        data.goals[i] = input.value;
+      });
+      document.querySelectorAll('.journal').forEach(input => {
+        data.journal[input.dataset.key] = input.value;
+      });
+
+      localStorage.setItem(getKey(), JSON.stringify(data));
+      streak++;
+      localStorage.setItem(streakKey, streak);
+      document.getElementById('streak').innerText = `Streak: ${streak} days`;
+      progress.style.width = `${(streak % 7) * 14.28}%`;
+      alert("Day saved and marked complete!");
+    }
+
+    function loadDay() {
+      const data = JSON.parse(localStorage.getItem(getKey())) || {
+        tasks: {}, goals: [], journal: {}
+      };
+      document.querySelectorAll('.task').forEach(cb => {
+        cb.checked = !!data.tasks[cb.dataset.key];
+      });
+      document.querySelectorAll('.goal').forEach((input, i) => {
+        input.value = data.goals[i] || "";
+      });
+      document.querySelectorAll('.journal').forEach(input => {
+        input.value = data.journal[input.dataset.key] || "";
+      });
+    }
+
+    loadDay();
+  </script>
+</body>
+</html>
+
