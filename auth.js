@@ -54,3 +54,4 @@ onAuthStateChanged(auth, (user) => {
 signupBtn?.addEventListener("click", signup);
 loginBtn?.addEventListener("click", login);
 logoutBtn?.addEventListener("click", logout);
+export { currentUser };
