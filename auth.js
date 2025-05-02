@@ -4,7 +4,7 @@ import {
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
-} from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js";
+} from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
 
 // Reference DOM elements
 const signupBtn = document.getElementById("signup-btn");
@@ -19,8 +19,17 @@ let currentUser = null;
 function signup() {
   const email = document.getElementById("email").value;
   const password = document.getElementById("password").value;
+  
+  if (!email || !password) {
+    return alert("Please enter both email and password");
+  }
+  
   createUserWithEmailAndPassword(auth, email, password)
-    .then(() => alert("Signup successful!"))
+    .then(() => {
+      alert("Signup successful!");
+      document.getElementById("email").value = "";
+      document.getElementById("password").value = "";
+    })
     .catch((error) => alert("Signup error: " + error.message));
 }
 
@@ -28,8 +37,17 @@ function signup() {
 function login() {
   const email = document.getElementById("email").value;
   const password = document.getElementById("password").value;
+  
+  if (!email || !password) {
+    return alert("Please enter both email and password");
+  }
+  
   signInWithEmailAndPassword(auth, email, password)
-    .then(() => alert("Login successful!"))
+    .then(() => {
+      alert("Login successful!");
+      document.getElementById("email").value = "";
+      document.getElementById("password").value = "";
+    })
     .catch((error) => alert("Login error: " + error.message));
 }
 
@@ -37,6 +55,9 @@ function login() {
 function logout() {
   signOut(auth).then(() => {
     alert("Logged out");
+  }).catch((error) => {
+    console.error("Logout error:", error);
+    alert("Error logging out: " + error.message);
   });
 }
 
@@ -45,9 +66,11 @@ onAuthStateChanged(auth, (user) => {
   currentUser = user;
 
   if (user) {
+    console.log("User logged in:", user.email);
     authSection?.classList.add("hidden");
     appSection?.classList.remove("hidden");
   } else {
+    console.log("User logged out");
     authSection?.classList.remove("hidden");
     appSection?.classList.add("hidden");
   }
