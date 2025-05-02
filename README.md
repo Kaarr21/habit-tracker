@@ -18,6 +18,7 @@
 ## Demo
 
 The app is live at: [https://kaarr21.github.io/habit-tracker/](https://kaarr21.github.io/habit-tracker/)
+It has also been deployed on vercel:[https://habit-tracker-six-topaz.vercel.app/]
 
 ## Technologies
 
