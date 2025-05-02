@@ -1,4 +1,3 @@
-// auth.js
 import { auth } from "./firebase.js";
 import {
   createUserWithEmailAndPassword,
@@ -13,6 +12,8 @@ const loginBtn = document.getElementById("login-btn");
 const logoutBtn = document.getElementById("logout-btn");
 const authSection = document.getElementById("auth-section");
 const appSection = document.getElementById("app-section");
+
+let currentUser = null;
 
 // Signup
 function signup() {
@@ -41,12 +42,14 @@ function logout() {
 
 // Auth State Listener
 onAuthStateChanged(auth, (user) => {
+  currentUser = user;
+
   if (user) {
-    authSection.classList.add("hidden");
-    appSection.classList.remove("hidden");
+    authSection?.classList.add("hidden");
+    appSection?.classList.remove("hidden");
   } else {
-    authSection.classList.remove("hidden");
-    appSection.classList.add("hidden");
+    authSection?.classList.remove("hidden");
+    appSection?.classList.add("hidden");
   }
 });
 
@@ -54,4 +57,10 @@ onAuthStateChanged(auth, (user) => {
 signupBtn?.addEventListener("click", signup);
 loginBtn?.addEventListener("click", login);
 logoutBtn?.addEventListener("click", logout);
+
+// Export getter
+export function getCurrentUser() {
+  return currentUser;
+}
 export { currentUser };
+export { signup, login, logout };

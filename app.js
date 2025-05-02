@@ -1,5 +1,5 @@
 import { db, storage } from './firebase.js';
-import { currentUser } from './auth.js';
+import { getCurrentUser } from './auth.js';
 import { ref as dbRef, set, get, child } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-database.js";
 import { ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-storage.js";
 
@@ -14,26 +14,29 @@ const today = new Date().toISOString().split("T")[0];
 dateInput.value = today;
 
 window.addEventListener("load", () => {
-  if (currentUser) {
-    loadData(today);
+  const user = getCurrentUser();
+  if (user) {
+    loadData(today, user.uid);
   } else {
     alert("Please log in to access your habits.");
   }
 });
 
 dateInput.addEventListener("change", () => {
-  if (currentUser) {
-    loadData(dateInput.value);
+  const user = getCurrentUser();
+  if (user) {
+    loadData(dateInput.value, user.uid);
   } else {
     alert("Please log in to access your habits.");
   }
 });
 
 saveBtn.addEventListener("click", async () => {
-  if (!currentUser) {
+  const user = getCurrentUser();
+  if (!user) {
     return alert("You must be logged in to save.");
   }
-  
+
   const date = dateInput.value;
   const habits = {};
   document.querySelectorAll("#habit-form input[type=checkbox]").forEach(cb => {
@@ -41,7 +44,7 @@ saveBtn.addEventListener("click", async () => {
   });
 
   const notes = noteInput.value;
-  const userId = currentUser.uid;
+  const userId = user.uid;
 
   try {
     // Save habit + note data
@@ -62,8 +65,7 @@ saveBtn.addEventListener("click", async () => {
   }
 });
 
-async function loadData(date) {
-  const userId = currentUser.uid;
+async function loadData(date, userId) {
   try {
     const snap = await get(child(dbRef(db), `users/${userId}/habits/${date}`));
     if (snap.exists()) {
