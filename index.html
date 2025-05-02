@@ -3,12 +3,123 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Habit Tracker</title>
+  <title>Lifestyle Tracker</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#cc3366">
   <!-- Use a data URI placeholder icon instead of referencing a file -->
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔥</text></svg>">
+  <style>
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+    }
+    .tab {
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .tab.active {
+      font-weight: bold;
+      border-bottom: 2px solid #ec4899;
+    }
+    /* styles.css - Add this as a separate file or in the <style> section of your HTML */
+
+/* Custom animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideIn {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* Apply animations to elements */
+.tab-content.active {
+  animation: fadeIn 0.5s ease;
+}
+
+#goals-list > div {
+  animation: slideIn 0.3s ease;
+}
+
+/* Improved form styling */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+textarea {
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+input[type="text"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+textarea:focus {
+  border-color: #ec4899;
+  box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.1);
+  outline: none;
+}
+
+/* Custom checkbox styling */
+input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 24px;
+  width: 24px;
+  background-color: #fff;
+  border: 2px solid #ec4899;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  outline: none;
+}
+
+input[type="checkbox"]:after {
+  content: "";
+  display: block;
+  width: 5px;
+  height: 10px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+  opacity: 0;
+}
+
+input[type="checkbox"]:checked {
+  background-color: #ec4899;
+}
+
+input[type="checkbox"]:checked:after {
+  opacity: 1;
+}
+
+/* Tab hover effects */
+.tab:hover {
+  background-color: rgba(236, 72, 153, 0.1);
+}
+
+/* Save button pulse effect */
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(236, 72, 153, 0.7); }
+  70% { box-shadow: 0 0 0 10px rgba(236, 72, 153, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(236, 72, 153, 0); }
+}
+
+#save-btn:hover {
+  animation: pulse 1.5s infinite;
+}
+
+/* Streak counter styles */
+#streak {
+  font-weight: bold;
+  text-shadow: 0 0 5px rgba(236, 72, 153, 0.3);
+}
+  </style>
 </head>
 <body class="bg-pink-50 min-h-screen p-4">
   <div id="auth-section" class="max-w-md mx-auto p-6 bg-white rounded-xl shadow-md mb-6">
@@ -22,41 +133,155 @@
     </div>
   </div>
 
-  <div id="app-section" class="hidden max-w-xl mx-auto bg-white p-6 rounded-xl shadow-md">
-    <h1 class="text-3xl font-bold text-center mb-4">Habit Tracker</h1>
+  <div id="app-section" class="hidden max-w-2xl mx-auto bg-white p-6 rounded-xl shadow-md">
+    <h1 class="text-3xl font-bold text-center mb-4">Lifestyle Tracker</h1>
     <div id="streak" class="text-xl text-center text-pink-600 mb-4">🔥 Streak: 0 days</div>
 
-    <label class="block mb-4">
-      <span>Date:</span>
-      <input type="date" id="date" class="mt-1 block w-full rounded border-pink-300" />
-    </label>
-
-    <form id="habit-form" class="grid grid-cols-2 gap-4 mb-4">
-      <label><input type="checkbox" name="bible" /> 📖 Bible Study</label>
-      <label><input type="checkbox" name="journal" /> 📝 Journal</label>
-      <label><input type="checkbox" name="hydrate" /> 💧 Hydrate</label>
-      <label><input type="checkbox" name="workout" /> 🏋️ Workout</label>
-      <label><input type="checkbox" name="read" /> 📚 Read</label>
-      <label><input type="checkbox" name="study" /> 💻 Study</label>
-    </form>
-
-    <div class="mb-4">
-      <label>🎯 Goal:</label>
-      <input type="text" id="goal" class="block w-full p-2 border rounded mt-1" />
-      <label class="inline-block mt-2"><input type="checkbox" id="goalDone" /> Done</label>
+    <div class="flex justify-between items-center mb-4">
+      <label class="flex items-center gap-2">
+        <span>📅 Date:</span>
+        <input type="date" id="date" class="p-2 rounded border-pink-300" />
+      </label>
+      <button id="save-btn" class="bg-pink-500 text-white px-4 py-2 rounded hover:bg-pink-600" onclick="saveData()">
+        💾 Save All
+      </button>
     </div>
 
-    <div class="mb-4">
-      <label>🗓️ Weekly Review:</label>
-      <textarea id="review" rows="3" class="block w-full p-2 border rounded"></textarea>
+    <!-- Tab Navigation -->
+    <div class="flex border-b mb-4">
+      <div class="tab active px-4 py-2" data-tab="habits">📊 Habits</div>
+      <div class="tab px-4 py-2" data-tab="goals">🎯 Goals</div>
+      <div class="tab px-4 py-2" data-tab="journal">📝 Journal</div>
+      <div class="tab px-4 py-2" data-tab="bible">📖 Bible Study</div>
     </div>
 
-    <div class="mb-4">
-      <label>📸 Upload Progress Photo:</label>
-      <input type="file" id="photo" accept="image/*" class="block mt-1" />
+    <!-- Habits Tab -->
+    <div id="habits-tab" class="tab-content active">
+      <h2 class="text-xl font-bold mb-3">Daily Habits</h2>
+      <form id="habit-form" class="grid grid-cols-2 gap-4 mb-4">
+        <label class="flex items-center gap-2">
+          <input type="checkbox" name="bible" class="w-5 h-5" />
+          <span>📖 Bible Study</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" name="journal" class="w-5 h-5" />
+          <span>📝 Journal</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" name="hydrate" class="w-5 h-5" />
+          <span>💧 Hydrate</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" name="workout" class="w-5 h-5" />
+          <span>🏋️ Workout</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" name="read" class="w-5 h-5" />
+          <span>📚 Read</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" name="study" class="w-5 h-5" />
+          <span>💻 Study</span>
+        </label>
+      </form>
+
+      <div class="mb-4">
+        <label>📸 Upload Progress Photo:</label>
+        <input type="file" id="photo" accept="image/*" class="block mt-1" />
+      </div>
     </div>
 
-    <button id="save-btn" class="w-full bg-pink-500 text-white py-2 rounded hover:bg-pink-600" onclick="saveData()">Save Progress</button>
+    <!-- Goals Tab -->
+    <div id="goals-tab" class="tab-content">
+      <h2 class="text-xl font-bold mb-3">Today's Goals</h2>
+      
+      <div class="flex items-center mb-4">
+        <input type="text" id="new-goal" placeholder="Add a new goal..." 
+               class="flex-grow p-2 border rounded mr-2" />
+        <button id="add-goal-btn" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+          Add
+        </button>
+      </div>
+      
+      <div id="goals-list" class="space-y-2 mb-4">
+        <!-- Goals will be added here dynamically -->
+      </div>
+    </div>
+
+    <!-- Journal Tab -->
+    <div id="journal-tab" class="tab-content">
+      <h2 class="text-xl font-bold mb-3">5-Minute Journal</h2>
+      
+      <div class="mb-4">
+        <h3 class="font-bold text-pink-600">I am grateful for...</h3>
+        <div class="space-y-2">
+          <input type="text" id="gratitude-1" placeholder="1." class="w-full p-2 border rounded" />
+          <input type="text" id="gratitude-2" placeholder="2." class="w-full p-2 border rounded" />
+          <input type="text" id="gratitude-3" placeholder="3." class="w-full p-2 border rounded" />
+        </div>
+      </div>
+      
+      <div class="mb-4">
+        <h3 class="font-bold text-pink-600">What would make today great?</h3>
+        <div class="space-y-2">
+          <input type="text" id="great-1" placeholder="1." class="w-full p-2 border rounded" />
+          <input type="text" id="great-2" placeholder="2." class="w-full p-2 border rounded" />
+          <input type="text" id="great-3" placeholder="3." class="w-full p-2 border rounded" />
+        </div>
+      </div>
+      
+      <div class="mb-4">
+        <h3 class="font-bold text-pink-600">Daily affirmation:</h3>
+        <input type="text" id="affirmation" placeholder="I am..." class="w-full p-2 border rounded" />
+      </div>
+      
+      <div class="mb-4">
+        <h3 class="font-bold text-pink-600">Highlights of the day:</h3>
+        <div class="space-y-2">
+          <input type="text" id="highlight-1" placeholder="1." class="w-full p-2 border rounded" />
+          <input type="text" id="highlight-2" placeholder="2." class="w-full p-2 border rounded" />
+          <input type="text" id="highlight-3" placeholder="3." class="w-full p-2 border rounded" />
+        </div>
+      </div>
+      
+      <div class="mb-4">
+        <h3 class="font-bold text-pink-600">How could I have made today better?</h3>
+        <textarea id="better-day" rows="3" class="w-full p-2 border rounded"></textarea>
+      </div>
+    </div>
+
+    <!-- Bible Study Tab -->
+    <div id="bible-tab" class="tab-content">
+      <h2 class="text-xl font-bold mb-3">Bible Study Journal</h2>
+      
+      <div class="mb-4">
+        <h3 class="font-bold text-pink-600">Scripture Reading:</h3>
+        <input type="text" id="scripture-reference" placeholder="Book Chapter:Verse" class="w-full p-2 border rounded mb-2" />
+        <textarea id="scripture-text" rows="3" placeholder="Write the verse(s) here..." class="w-full p-2 border rounded"></textarea>
+      </div>
+      
+      <div class="mb-4">
+        <h3 class="font-bold text-pink-600">Observations (What does it say?):</h3>
+        <textarea id="bible-observations" rows="3" class="w-full p-2 border rounded"></textarea>
+      </div>
+      
+      <div class="mb-4">
+        <h3 class="font-bold text-pink-600">Application (How does it apply to me?):</h3>
+        <textarea id="bible-application" rows="3" class="w-full p-2 border rounded"></textarea>
+      </div>
+      
+      <div class="mb-4">
+        <h3 class="font-bold text-pink-600">Prayer (My response to God):</h3>
+        <textarea id="bible-prayer" rows="3" class="w-full p-2 border rounded"></textarea>
+      </div>
+    </div>
+
+    <!-- Weekly Review Section (always visible at bottom) -->
+    <div class="mt-6 pt-4 border-t border-gray-300">
+      <h2 class="text-xl font-bold mb-3">🗓️ Weekly Review</h2>
+      <textarea id="review" rows="4" class="w-full p-2 border rounded" 
+                placeholder="Reflect on your week: What went well? What could improve? What are you looking forward to?"></textarea>
+    </div>
   </div>
 
   <script type="module" src="firebase.js"></script>
