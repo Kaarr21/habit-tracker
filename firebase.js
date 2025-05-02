@@ -7,7 +7,8 @@ import { getStorage } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-
 const firebaseConfig = {
   apiKey: "AIzaSyBj_0it9xRC_RDJ6G6nTumNdHlyCOe__-s",
   authDomain: "habittrackerapp-47da5.firebaseapp.com",
-  databaseURL: "https://habittrackerapp-47da5.firebaseio.com",
+  // Fix the database URL - use the URL from the warning message
+  databaseURL: "https://habittrackerapp-47da5-default-rtdb.firebaseio.com",
   projectId: "habittrackerapp-47da5",
   storageBucket: "habittrackerapp-47da5.appspot.com",
   messagingSenderId: "308625902639",

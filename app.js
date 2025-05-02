@@ -5,7 +5,6 @@ import { ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gsta
 
 // Get correct form elements
 const habitForm = document.getElementById("habit-form");
-const saveButton = document.getElementById("save-btn");
 const dateInput = document.getElementById("date");
 const streakDisplay = document.getElementById("streak");
 const goalInput = document.getElementById("goal");
@@ -25,11 +24,17 @@ window.addEventListener("load", () => {
     console.log("User not logged in yet");
   }
   
-  // Register service worker
+  // Register service worker - with proper error handling
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./service-worker.js')
-      .then(reg => console.log('Service Worker registered:', reg))
-      .catch(err => console.error('Service Worker registration failed:', err));
+    window.addEventListener('load', function() {
+      navigator.serviceWorker.register('./service-worker.js')
+        .then(function(registration) {
+          console.log('ServiceWorker registration successful with scope: ', registration.scope);
+        })
+        .catch(function(error) {
+          console.log('ServiceWorker registration failed: ', error);
+        });
+    });
   }
 });
 
@@ -42,7 +47,7 @@ dateInput.addEventListener("change", () => {
   }
 });
 
-// Fix saveData function
+// Fix saveData function - make it global for HTML onclick
 window.saveData = async function() {
   const user = getCurrentUser();
   if (!user) {
