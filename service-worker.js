@@ -1,183 +1,115 @@
-const CACHE_NAME = 'habit-tracker-v2';
-const APP_SHELL = [
+// service-worker.js - Updated for better offline functionality
+
+const CACHE_NAME = 'lifestyle-tracker-v1';
+const DYNAMIC_CACHE = 'lifestyle-tracker-dynamic-v1';
+
+// Assets to cache immediately during installation
+const APP_ASSETS = [
   './',
-  './index.html', 
+  './index.html',
   './app.js',
   './auth.js',
-  './firebase.js',
   './dataManager.js',
-  './manifest.json'
+  './firebase.js',
+  './manifest.json',
+  'https://cdn.tailwindcss.com',
+  'https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js',
+  'https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js',
+  'https://www.gstatic.com/firebasejs/10.11.0/firebase-database.js',
+  'https://www.gstatic.com/firebasejs/10.11.0/firebase-storage.js'
 ];
 
-// Dynamic cache for other resources
-const DYNAMIC_CACHE = 'habit-tracker-dynamic-v1';
-
-// Install event - cache core assets
-self.addEventListener('install', event => {
-  console.log('Service Worker: Installing...');
+// Install event - cache our basic assets
+self.addEventListener('install', (event) => {
+  console.log('[Service Worker] Installing Service Worker...');
   
-  // Ensure the service worker becomes active right away
+  // Skip waiting to ensure the new service worker activates immediately
   self.skipWaiting();
   
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => {
-        console.log('Service Worker: Caching App Shell');
-        return cache.addAll(APP_SHELL);
-      })
-      .catch(err => console.error('Cache addAll error:', err))
+    caches.open(CACHE_NAME).then((cache) => {
+      console.log('[Service Worker] Pre-caching app assets');
+      return cache.addAll(APP_ASSETS);
+    })
   );
 });
 
 // Activate event - clean up old caches
-self.addEventListener('activate', event => {
-  console.log('Service Worker: Activating...');
+self.addEventListener('activate', (event) => {
+  console.log('[Service Worker] Activating Service Worker...');
   
-  // Take control of all clients immediately
+  // Claim clients to ensure the SW controls all clients immediately
+  event.waitUntil(clients.claim());
+  
+  // Delete old caches
   event.waitUntil(
-    Promise.all([
-      self.clients.claim(),
+    caches.keys().then((keyList) => {
+      return Promise.all(keyList.map((key) => {
+        if (key !== CACHE_NAME && key !== DYNAMIC_CACHE) {
+          console.log('[Service Worker] Removing old cache', key);
+          return caches.delete(key);
+        }
+      }));
+    })
+  );
+  
+  return self.clients.claim();
+});
+
+// Fetch event - serve cached content when offline
+self.addEventListener('fetch', (event) => {
+  // Skip non-GET requests and Firebase API requests
+  if (event.request.method !== 'GET' || 
+      event.request.url.includes('firebaseio.com') || 
+      event.request.url.includes('googleapis.com')) {
+    return;
+  }
+
+  event.respondWith(
+    caches.match(event.request).then((response) => {
+      // Return cached response if found
+      if (response) {
+        return response;
+      }
       
-      // Remove old caches
-      caches.keys().then(cacheNames => {
-        return Promise.all(
-          cacheNames.map(cacheName => {
-            if (cacheName !== CACHE_NAME && cacheName !== DYNAMIC_CACHE) {
-              console.log('Service Worker: Deleting old cache', cacheName);
-              return caches.delete(cacheName);
-            }
-            return null;
-          })
-        );
-      })
-    ])
+      // Otherwise fetch from network
+      return fetch(event.request)
+        .then((fetchResponse) => {
+          // Don't cache non-successful responses
+          if (!fetchResponse || fetchResponse.status !== 200 || fetchResponse.type !== 'basic') {
+            return fetchResponse;
+          }
+          
+          // Cache dynamic content for future offline use
+          const responseToCache = fetchResponse.clone();
+          caches.open(DYNAMIC_CACHE)
+            .then((cache) => {
+              cache.put(event.request, responseToCache);
+            });
+            
+          return fetchResponse;
+        })
+        .catch(() => {
+          // If both cache and network fail, return a fallback for HTML
+          if (event.request.headers.get('accept').includes('text/html')) {
+            return caches.match('./index.html');
+          }
+          
+          // For other resources, we just have to fail
+          return new Response('Not available offline');
+        });
+    })
   );
 });
 
-// Helper function to determine if a request should be cached
-function shouldCache(url) {
-  // Don't cache Firebase API requests or auth
-  if (url.includes('firebasestorage.googleapis.com') || 
-      url.includes('firebaseio.com') ||
-      url.includes('firebase-auth') ||
-      url.includes('googleapis.com')) {
-    return false;
-  }
+// Handle sync events for background data uploading
+self.addEventListener('sync', (event) => {
+  console.log('[Service Worker] Background Sync', event.tag);
   
-  // Don't cache other third-party APIs
-  if (url.includes('cdn') || 
-      url.includes('api.') || 
-      url.includes('analytics')) {
-    return false;
-  }
-  
-  return true;
-}
-
-// Network first, falling back to cache strategy
-async function networkFirstWithCache(request) {
-  try {
-    // Try network first
-    const networkResponse = await fetch(request);
-    
-    // If successful and cacheable, update cache
-    if (networkResponse.ok && shouldCache(request.url)) {
-      const cache = await caches.open(DYNAMIC_CACHE);
-      cache.put(request, networkResponse.clone());
-    }
-    
-    return networkResponse;
-  } catch (error) {
-    // Network failed, try cache
-    const cachedResponse = await caches.match(request);
-    
-    // Return cached response or a fallback
-    if (cachedResponse) {
-      return cachedResponse;
-    }
-    
-    // For HTML requests, return the offline page
-    if (request.headers.get('Accept').includes('text/html')) {
-      return caches.match('./index.html');
-    }
-    
-    // If nothing else works, throw the error
-    throw error;
-  }
-}
-
-// Cache first, falling back to network strategy (for static assets)
-async function cacheFirstWithNetwork(request) {
-  const cachedResponse = await caches.match(request);
-  if (cachedResponse) {
-    return cachedResponse;
-  }
-  
-  // If not in cache, get from network
-  try {
-    const networkResponse = await fetch(request);
-    
-    // Update cache
-    if (networkResponse.ok && shouldCache(request.url)) {
-      const cache = await caches.open(DYNAMIC_CACHE);
-      cache.put(request, networkResponse.clone());
-    }
-    
-    return networkResponse;
-  } catch (error) {
-    // If it's an HTML request and we can't get it, return offline page
-    if (request.headers.get('Accept').includes('text/html')) {
-      return caches.match('./index.html');
-    }
-    
-    throw error;
-  }
-}
-
-// Fetch event - apply different strategies based on request type
-self.addEventListener('fetch', event => {
-  const url = new URL(event.request.url);
-  
-  // Skip cross-origin requests
-  if (url.origin !== self.location.origin) {
-    return;
-  }
-  
-  // Skip Firebase API requests
-  if (!shouldCache(event.request.url)) {
-    return;
-  }
-  
-  // For page navigations, use network-first strategy
-  if (event.request.mode === 'navigate') {
-    event.respondWith(networkFirstWithCache(event.request));
-    return;
-  }
-  
-  // For app shell assets, use cache-first
-  if (APP_SHELL.includes(url.pathname) || 
-      event.request.url.match(/\.(js|css|png|jpg|svg)$/)) {
-    event.respondWith(cacheFirstWithNetwork(event.request));
-    return;
-  }
-  
-  // For everything else, use network-first
-  event.respondWith(networkFirstWithCache(event.request));
-});
-
-// Listen for messages from clients
-self.addEventListener('message', event => {
-  if (event.data === 'skipWaiting') {
-    self.skipWaiting();
-  }
-});
-
-// Background sync for offline actions
-self.addEventListener('sync', event => {
   if (event.tag === 'sync-data') {
     event.waitUntil(
-      // Send a message to the client to trigger data sync
-      self.clients.matchAll().then(clients => {
+      // Notify all clients to try syncing their data
+      self.clients.matchAll().then((clients) => {
         clients.forEach(client => {
           client.postMessage({
             type: 'SYNC_REQUIRED'
@@ -186,4 +118,28 @@ self.addEventListener('sync', event => {
       })
     );
   }
+});
+
+// Handle push notifications
+self.addEventListener('push', (event) => {
+  console.log('[Service Worker] Push Notification received', event);
+  
+  let data = { title: 'New message', content: 'Something happened!' };
+  
+  if (event.data) {
+    data = JSON.parse(event.data.text());
+  }
+  
+  const options = {
+    body: data.content,
+    icon: './icon-192x192.png',
+    badge: './icon-96x96.png',
+    data: {
+      openUrl: data.openUrl
+    }
+  };
+  
+  event.waitUntil(
+    self.registration.showNotification(data.title, options)
+  );
 });
