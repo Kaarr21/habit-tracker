@@ -2,6 +2,7 @@ import { db, storage } from './firebase.js';
 import { getCurrentUser } from './auth.js';
 import { ref as dbRef, set, get, child, push, remove, update } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-database.js";
 import { ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-storage.js";
+import * as DataManager from './dataManager.js';
 
 // Get form elements
 const habitForm = document.getElementById("habit-form");
@@ -12,6 +13,8 @@ const photoInput = document.getElementById("photo");
 const newGoalInput = document.getElementById("new-goal");
 const addGoalBtn = document.getElementById("add-goal-btn");
 const goalsList = document.getElementById("goals-list");
+const saveBtn = document.getElementById("save-btn");
+const offlineIndicator = document.getElementById("offline-indicator");
 
 // Tab navigation elements
 const tabs = document.querySelectorAll(".tab");
@@ -49,9 +52,29 @@ const biblePrayer = document.getElementById("bible-prayer");
 
 let currentUserID = null;
 let currentGoals = {};
+let photoURL = null;
+let photoChanged = false;
 
 const today = new Date().toISOString().split("T")[0];
-dateInput.value = today;
+
+// Initialize offline status indicator
+function updateOfflineStatus() {
+  if (offlineIndicator) {
+    if (navigator.onLine) {
+      offlineIndicator.classList.add('hidden');
+    } else {
+      offlineIndicator.classList.remove('hidden');
+    }
+  }
+}
+
+// Network status listeners
+window.addEventListener('online', () => {
+  updateOfflineStatus();
+  DataManager.syncWithFirebase(); // Sync data when back online
+});
+
+window.addEventListener('offline', updateOfflineStatus);
 
 // Initialize tabs
 tabs.forEach(tab => {
@@ -131,27 +154,69 @@ function renderGoals() {
   });
 }
 
-window.addEventListener("load", () => {
+// Service worker message handler
+navigator.serviceWorker.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SYNC_REQUIRED') {
+    DataManager.syncWithFirebase();
+  }
+});
+
+window.addEventListener("load", async () => {
+  // Initialize offline indicator
+  updateOfflineStatus();
+  
+  // Initialize DataManager sync listeners
+  DataManager.initSyncListeners();
+  
+  // Check for user
   const user = getCurrentUser();
   if (user) {
     currentUserID = user.uid;
-    loadData(today, user.uid);
-    loadStreak(user.uid);
+    
+    // Get the saved date or default to today
+    const savedDate = DataManager.getSavedDate() || today;
+    dateInput.value = savedDate;
+    
+    // Load data for the active date
+    await loadData(savedDate, user.uid);
+    
+    // Calculate and display streak
+    const streak = await DataManager.calculateStreak(user.uid);
+    streakDisplay.textContent = `🔥 Streak: ${streak} day${streak !== 1 ? 's' : ''}`;
   } else {
     console.log("User not logged in yet");
+    dateInput.value = today;
   }
   
   // Register service worker
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', function() {
-      navigator.serviceWorker.register('./service-worker.js')
-        .then(function(registration) {
-          console.log('ServiceWorker registration successful with scope: ', registration.scope);
-        })
-        .catch(function(error) {
-          console.log('ServiceWorker registration failed: ', error);
+    try {
+      const registration = await navigator.serviceWorker.register('./service-worker.js', { 
+        scope: './' 
+      });
+      console.log('ServiceWorker registered with scope:', registration.scope);
+      
+      // Check if there's a waiting service worker
+      if (registration.waiting) {
+        // New service worker is waiting - we could notify the user here
+        console.log('New service worker is waiting to activate');
+      }
+      
+      // Handle updates
+      registration.addEventListener('updatefound', () => {
+        const newWorker = registration.installing;
+        console.log('New service worker installing');
+        
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            console.log('New service worker installed and waiting');
+            // We could show a prompt to the user here to refresh for updates
+          }
         });
-    });
+      });
+    } catch (error) {
+      console.error('ServiceWorker registration failed:', error);
+    }
   }
 });
 
@@ -159,228 +224,33 @@ dateInput.addEventListener("change", () => {
   const user = getCurrentUser();
   if (user) {
     loadData(dateInput.value, user.uid);
+    // Save the current date to localStorage
+    DataManager.saveToLocalStorage('current-date', dateInput.value);
   } else {
     alert("Please log in to access your data.");
   }
 });
 
-// Save all data
-window.saveData = async function() {
-  const user = getCurrentUser();
-  if (!user) {
-    return alert("You must be logged in to save.");
-  }
-
-  const date = dateInput.value;
+// Photo change handler
+photoInput.addEventListener("change", () => {
+  photoChanged = true;
   
-  // Collect habits data
-  const habits = {};
-  document.querySelectorAll("#habit-form input[type=checkbox]").forEach(cb => {
-    habits[cb.name] = cb.checked;
-  });
-
-  // Collect journal data
-  const journalData = {
-    gratitude: gratitudeInputs.map(input => input.value),
-    great: greatInputs.map(input => input.value),
-    affirmation: affirmationInput.value,
-    highlights: highlightInputs.map(input => input.value),
-    betterDay: betterDayInput.value
-  };
-
-  // Collect Bible study data
-  const bibleData = {
-    reference: scriptureReference.value,
-    text: scriptureText.value,
-    observations: bibleObservations.value,
-    application: bibleApplication.value,
-    prayer: biblePrayer.value
-  };
-
-  // Compile all data
-  const dailyData = {
-    habits,
-    goals: currentGoals,
-    journal: journalData,
-    bible: bibleData,
-    review: reviewTextarea.value
-  };
-
-  const userId = user.uid;
-
-  try {
-    // Save all data
-    await set(dbRef(db, `users/${userId}/habits/${date}`), dailyData);
-
-    // Handle image upload
-    const file = photoInput.files[0];
-    if (file) {
-      const imgRef = storageRef(storage, `users/${userId}/photos/${date}.jpg`);
-      await uploadBytes(imgRef, file);
-      
-      // Get and store download URL
-      const downloadURL = await getDownloadURL(imgRef);
-      await set(dbRef(db, `users/${userId}/habits/${date}/photoURL`), downloadURL);
-    }
-
-    alert("Progress saved successfully!");
-    loadStreak(userId);
-  } catch (error) {
-    console.error("Error saving data:", error);
-    alert("There was an error saving your data: " + error.message);
-  }
-};
-
-async function loadData(date, userId) {
-  try {
-    const snap = await get(child(dbRef(db), `users/${userId}/habits/${date}`));
-    if (snap.exists()) {
-      const data = snap.val();
-      
-      // Load habits
-      const habits = data.habits || {};
-      document.querySelectorAll("#habit-form input[type=checkbox]").forEach(cb => {
-        cb.checked = habits[cb.name] || false;
-      });
-      
-      // Load goals
-      currentGoals = data.goals || {};
-      renderGoals();
-      
-      // Load journal data
-      if (data.journal) {
-        const journal = data.journal;
-        
-        // Gratitude
-        if (journal.gratitude) {
-          journal.gratitude.forEach((item, index) => {
-            if (index < gratitudeInputs.length) {
-              gratitudeInputs[index].value = item || "";
-            }
-          });
-        }
-        
-        // Great day items
-        if (journal.great) {
-          journal.great.forEach((item, index) => {
-            if (index < greatInputs.length) {
-              greatInputs[index].value = item || "";
-            }
-          });
-        }
-        
-        // Affirmation
-        affirmationInput.value = journal.affirmation || "";
-        
-        // Highlights
-        if (journal.highlights) {
-          journal.highlights.forEach((item, index) => {
-            if (index < highlightInputs.length) {
-              highlightInputs[index].value = item || "";
-            }
-          });
-        }
-        
-        // Better day
-        betterDayInput.value = journal.betterDay || "";
+  // Preview image if possible
+  const file = photoInput.files[0];
+  if (file) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      // If preview element exists, update it
+      const photoPreview = document.getElementById('photo-preview');
+      if (photoPreview) {
+        photoPreview.src = e.target.result;
+        photoPreview.classList.remove('hidden');
       } else {
-        // Reset journal fields
-        gratitudeInputs.forEach(input => input.value = "");
-        greatInputs.forEach(input => input.value = "");
-        affirmationInput.value = "";
-        highlightInputs.forEach(input => input.value = "");
-        betterDayInput.value = "";
-      }
-      
-      // Load Bible study data
-      if (data.bible) {
-        const bible = data.bible;
-        scriptureReference.value = bible.reference || "";
-        scriptureText.value = bible.text || "";
-        bibleObservations.value = bible.observations || "";
-        bibleApplication.value = bible.application || "";
-        biblePrayer.value = bible.prayer || "";
-      } else {
-        // Reset Bible study fields
-        scriptureReference.value = "";
-        scriptureText.value = "";
-        bibleObservations.value = "";
-        bibleApplication.value = "";
-        biblePrayer.value = "";
-      }
-      
-      // Load review
-      reviewTextarea.value = data.review || "";
-    } else {
-      // Reset form if no data exists
-      resetAllFields();
-    }
-  } catch (error) {
-    console.error("Error loading data:", error);
-  }
-}
-
-function resetAllFields() {
-  // Reset habits
-  document.querySelectorAll("#habit-form input[type=checkbox]").forEach(cb => cb.checked = false);
-  
-  // Reset goals
-  currentGoals = {};
-  renderGoals();
-  
-  // Reset journal
-  gratitudeInputs.forEach(input => input.value = "");
-  greatInputs.forEach(input => input.value = "");
-  affirmationInput.value = "";
-  highlightInputs.forEach(input => input.value = "");
-  betterDayInput.value = "";
-  
-  // Reset Bible study
-  scriptureReference.value = "";
-  scriptureText.value = "";
-  bibleObservations.value = "";
-  bibleApplication.value = "";
-  biblePrayer.value = "";
-  
-  // Reset review
-  reviewTextarea.value = "";
-}
-
-async function loadStreak(userId) {
-  try {
-    const snap = await get(child(dbRef(db), `users/${userId}/habits`));
-    if (snap.exists()) {
-      const data = snap.val();
-      const days = Object.entries(data).sort(([a], [b]) => a > b ? -1 : 1);
-      
-      let count = 0;
-      for (const [_, val] of days) {
-        // Consider a day complete if all habits are checked
-        let allHabitsComplete = true;
-        
-        if (val.habits) {
-          const habitEntries = Object.entries(val.habits);
-          if (habitEntries.length > 0) {
-            allHabitsComplete = habitEntries.every(([_, completed]) => completed === true);
-          } else {
-            allHabitsComplete = false;
-          }
-        } else {
-          allHabitsComplete = false;
-        }
-        
-        if (allHabitsComplete) {
-          count++;
-        } else {
-          break;
-        }
-      }
-      
-      streakDisplay.textContent = `🔥 Streak: ${count} day${count !== 1 ? 's' : ''}`;
-    } else {
-      streakDisplay.textContent = "🔥 Streak: 0 days";
-    }
-  } catch (error) {
-    console.error("Error loading streak:", error);
-  }
-}
+        // Create preview element if it doesn't exist
+        const previewContainer = document.createElement('div');
+        previewContainer.className = 'mt-2';
+        previewContainer.innerHTML = `
+          <img id="photo-preview" src="${e.target.result}" 
+               alt="Preview" class="w-full max-h-48 object-contain rounded">
+        `;
+        photoInput.parentNode.
