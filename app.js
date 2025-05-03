@@ -253,4 +253,219 @@ photoInput.addEventListener("change", () => {
           <img id="photo-preview" src="${e.target.result}" 
                alt="Preview" class="w-full max-h-48 object-contain rounded">
         `;
-        photoInput.parentNode.
+        photoInput.parentNode.appendChild(previewContainer);
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+});
+
+// Load data from Firebase or localStorage
+async function loadData(date, userId) {
+  try {
+    const data = await DataManager.loadData(date, userId);
+    if (!data) return;
+    
+    // Populate habits checkboxes
+    if (data.habits) {
+      for (const habitInput of habitForm.elements) {
+        if (habitInput.type === 'checkbox') {
+          habitInput.checked = data.habits[habitInput.name] === true;
+        }
+      }
+    }
+    
+    // Populate goals
+    if (data.goals) {
+      currentGoals = data.goals;
+      renderGoals();
+    } else {
+      currentGoals = {};
+      renderGoals();
+    }
+    
+    // Populate review
+    if (data.review) {
+      reviewTextarea.value = data.review;
+    } else {
+      reviewTextarea.value = '';
+    }
+    
+    // Handle journal data
+    if (data.journal) {
+      // Gratitude
+      if (data.journal.gratitude) {
+        gratitudeInputs.forEach((input, idx) => {
+          input.value = data.journal.gratitude[idx] || '';
+        });
+      }
+      
+      // Great day items
+      if (data.journal.great) {
+        greatInputs.forEach((input, idx) => {
+          input.value = data.journal.great[idx] || '';
+        });
+      }
+      
+      // Affirmation
+      if (data.journal.affirmation) {
+        affirmationInput.value = data.journal.affirmation;
+      }
+      
+      // Highlights
+      if (data.journal.highlights) {
+        highlightInputs.forEach((input, idx) => {
+          input.value = data.journal.highlights[idx] || '';
+        });
+      }
+      
+      // Better day
+      if (data.journal.betterDay) {
+        betterDayInput.value = data.journal.betterDay;
+      }
+    } else {
+      // Clear journal fields
+      gratitudeInputs.forEach(input => input.value = '');
+      greatInputs.forEach(input => input.value = '');
+      affirmationInput.value = '';
+      highlightInputs.forEach(input => input.value = '');
+      betterDayInput.value = '';
+    }
+    
+    // Handle Bible study data
+    if (data.bibleStudy) {
+      scriptureReference.value = data.bibleStudy.reference || '';
+      scriptureText.value = data.bibleStudy.text || '';
+      bibleObservations.value = data.bibleStudy.observations || '';
+      bibleApplication.value = data.bibleStudy.application || '';
+      biblePrayer.value = data.bibleStudy.prayer || '';
+    } else {
+      // Clear Bible study fields
+      scriptureReference.value = '';
+      scriptureText.value = '';
+      bibleObservations.value = '';
+      bibleApplication.value = '';
+      biblePrayer.value = '';
+    }
+    
+    // Handle photo URL
+    photoURL = data.photoURL || null;
+    photoChanged = false;
+    
+    // Update photo preview if exists
+    const photoPreview = document.getElementById('photo-preview');
+    if (photoPreview) {
+      if (photoURL) {
+        photoPreview.src = photoURL;
+        photoPreview.classList.remove('hidden');
+      } else {
+        photoPreview.classList.add('hidden');
+      }
+    } else if (photoURL) {
+      // Create preview element if it doesn't exist but we have a URL
+      const previewContainer = document.createElement('div');
+      previewContainer.className = 'mt-2';
+      previewContainer.innerHTML = `
+        <img id="photo-preview" src="${photoURL}" 
+             alt="Preview" class="w-full max-h-48 object-contain rounded">
+      `;
+      photoInput.parentNode.appendChild(previewContainer);
+    }
+    
+  } catch (error) {
+    console.error("Error loading data:", error);
+    alert("Failed to load data. Please try again.");
+  }
+}
+
+// Save all data to Firebase and localStorage
+async function saveData() {
+  const user = getCurrentUser();
+  if (!user) {
+    alert("Please log in to save your data.");
+    return;
+  }
+  
+  const date = dateInput.value;
+  
+  // Collect habits data
+  const habits = {};
+  for (const habitInput of habitForm.elements) {
+    if (habitInput.type === 'checkbox') {
+      habits[habitInput.name] = habitInput.checked;
+    }
+  }
+  
+  // Collect journal data
+  const journal = {
+    gratitude: gratitudeInputs.map(input => input.value.trim()),
+    great: greatInputs.map(input => input.value.trim()),
+    affirmation: affirmationInput.value.trim(),
+    highlights: highlightInputs.map(input => input.value.trim()),
+    betterDay: betterDayInput.value.trim()
+  };
+  
+  // Collect Bible study data
+  const bibleStudy = {
+    reference: scriptureReference.value.trim(),
+    text: scriptureText.value.trim(),
+    observations: bibleObservations.value.trim(),
+    application: bibleApplication.value.trim(),
+    prayer: biblePrayer.value.trim()
+  };
+  
+  // Prepare form data
+  const formData = {
+    habits,
+    goals: currentGoals,
+    review: reviewTextarea.value.trim(),
+    journal,
+    bibleStudy,
+    photoURL: photoURL,
+    lastUpdated: new Date().toISOString()
+  };
+  
+  // Get photo file if changed
+  let file = null;
+  if (photoChanged && photoInput.files.length > 0) {
+    file = photoInput.files[0];
+  }
+  
+  try {
+    // Show saving indicator
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Saving...";
+    
+    // Save to Firebase and localStorage
+    const saved = await DataManager.saveAllData(date, formData, file);
+    
+    if (saved) {
+      // Update photoURL and reset photoChanged flag
+      if (file) {
+        // If we're online, the URL is already in formData from the Firebase upload
+        // If we're offline, we'll get a data URL to display temporarily
+        const localImageURL = await DataManager.getLocalImage(date, user.uid);
+        photoURL = formData.photoURL || localImageURL;
+        photoChanged = false;
+      }
+      
+      alert("Data saved successfully!");
+      
+      // Update streak count after saving
+      const streak = await DataManager.calculateStreak(user.uid);
+      streakDisplay.textContent = `🔥 Streak: ${streak} day${streak !== 1 ? 's' : ''}`;
+    } else {
+      alert("Data saved locally. Will sync when you're back online.");
+    }
+  } catch (error) {
+    console.error("Error saving data:", error);
+    alert("Failed to save data. Please try again.");
+  } finally {
+    // Reset button
+    saveBtn.disabled = false;
+    saveBtn.textContent = "💾 Save All";
+  }
+}
+
+// Make saveData function available globally for the button in HTML
+window.saveData = saveData;
